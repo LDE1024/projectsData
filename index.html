@@ -491,7 +491,7 @@ const buttonsContainer = document.querySelector('.letter');
 alphabet.forEach(letter => {
     const button = document.createElement('button');
     button.textContent = letter;
-    button.syle.width = '15px';
+    button.style.width = '15px';
     button.style.margin = '3.5px';
     button.addEventListener('click', () => filterByLetter(letter));
     buttonsContainer.appendChild(button);
