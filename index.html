@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.js"></script>
+  <style>
+    * {
+  padding: 0;
+  margin: 0;
+}
+body {
+  background-color: rgb(218, 218, 218);
+}
+.container {
+  display: flex;
+  justify-content: space-between;
+  background-color: white;
+  height: 710px;
+}
+.container-left {
+  width: 20%;
+  height: 700px;
+  
+}
+.container-middle{
+  width: 50%;
+  height: 702px;
+
+}
+.container-right {
+  width: 30%;
+  max-width: 30%;
+  height: 702px;
+  transition: max-width 0.3s ease;
+}
+
+.container-right.collapsed {
+  transform: translateX(100%);
+}
+.container-middle-expanded {
+  width: 80%; 
+  
+}
+
+.scatter-point{
+  width: 100%;
+  height: 695px;
+  border: 0.5px solid #ccc;
+}
+
+.inputbutton{
+    width:100%;
+    height: 80px;
+    background-color: #ddd;
+}
+.letter{
+      width:100%;
+      height:54px;
+      border:0.5px solid #ccc;
+    }
+.toggleCollapse{
+      width: 100%;
+      height: 60px;
+    }
+.divContainer{    
+    width:100%;
+    height:561px;
+    overflow-y: auto;
+}
+.searchBox{
+  width:80%;
+}
+.PaperContainer {
+ width: 100%;
+ height: 135px;
+ border: 0.5px solid #ccc; 
+ overflow-y: auto; 
+}
+.bar{
+  width: 100%;
+  height: 255px;
+  border: 0.5px solid #ccc;
+  
+}
+.works{
+  width: 100%;
+  height: 300px;
+  border: 0.5px solid #ccc;
+}
+.tooltip {
+  position: fixed;
+background-color: #f9f9f9;
+border: 0.5px solid #ccc;
+border-radius: 5px;
+padding: 10px;
+z-index: 9999;
+box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);  
+max-width: 350px;
+max-height: 150px;
+overflow: auto; 
+top: 5px; 
+right: 420px;   
+}
+.bartooltip {
+      position: fixed;
+      background-color: #f9f9f9;
+      border: 0.5px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      z-index: 9999;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);  
+      max-width: 150px;
+      max-height: 150px;
+      overflow: auto; 
+      top: 200px; 
+      right: 420px;   
+    }
+  </style>
+</head>
+<body>
+    <div>
+      <div class = "container">
+          <div class = "container-left">
+            <div class = "inputbutton" >
+              <button class = "toggleCollapse">ToggleCollapse</button>
+              <input type = "text" class = "searchBox" placeholder = "搜索关键词...">
+          </div>
+              <div class = "divContainer"></div>
+              <div class ="letter"></div>
+            </div>
+        <div class = "container-middle">
+          <div class = "scatter-point"></div>
+        </div>
+        <div class = "container-right">
+          <div class = "PaperContainer"></div>
+          <div class = "bar"></div>
+          <div class = "works"></div>
+        </div>
+      </div>
+    </div>
+  <script>
+   
+  const margin = { top: 15, right: 35, bottom: 35, left: 5 };  
+  let topicJSONData = []
+  const header = document.querySelector(".header");
+  const containerLeft = document.querySelector(".container-left");
+  const scatterpoint = document.querySelector(".scatter-point");
+  const containerRight = document.querySelector(".container-right");
+  const papercontainer = document.querySelector(".PaperContainer");
+  const works = document.querySelector(".works");
+  const Bar = document.querySelector(".bar");
+  const containerMiddle = document.querySelector(".container-middle");
+
+  const { clientWidth: worksWidth, clientHeight: worksHeight } = works
+  const { clientWidth: BarWidth, clientHeight: BarHeight } = Bar
+  const { clientWidth: scatterWidth, clientHeight:scatterHeight } = scatterpoint
+
+        
+  const scatterPlotSvg = d3.create("svg")
+                           .attr("viewBox", [0, 0, scatterWidth, scatterHeight]);
+        
+  const scatterPlotGroup = scatterPlotSvg.append("g")
+                                         .attr("transform", `translate(${margin.left}, ${margin.top})`);
+  
+  let xScale, yScale, scatterData
+  
+  d3.json('projects.json').then(data => {
+    const domains = Array.from(new Set(data.map(d => d.领域)));
+    const colorScale = d3.scaleOrdinal()
+                         .domain(domains)
+                         .range(d3.schemeCategory10);
+    xScale = d3.scaleLinear()
+                .domain(d3.extent(data.map(d => d.tsne_x)))
+                .range([margin.left+105, scatterWidth - margin.right-105]);
+  
+    yScale = d3.scaleLinear()
+               .domain(d3.extent(data.map(d => d.tsne_y)))
+               .range([scatterHeight - margin.bottom-35, margin.top+35]);
+  
+    scatterData = data;
+   
+    scatterPlotGroup.selectAll('circle')
+                    .data(data)
+                    .enter()
+                    .append('circle')
+                    .attr('class', 'scatter-point')
+                    .attr('cx', d => xScale(d.tsne_x))
+                    .attr('cy', d => yScale(d.tsne_y))
+                    .attr('r', 4)
+                    .style('fill',  d => colorScale(d.领域))
+    drawCircleBrush(scatterWidth/2, scatterHeight/2);
+    updateSelectedData(scatterWidth/2, scatterHeight/2);
+    renderBar(data);
+    
+  });
+   //词云图
+   function drawWordCloud(data){
+    works.innerHTML = '';
+    const clouddata = [];
+    data.forEach(d => {
+        const requirements = d.人员要求;
+        if(requirements){
+            const words = requirements.split(/[;,]+/);
+            words.forEach(word => {
+                const trimmedWord = word.trim();
+                const existingWord = clouddata.find(item => item.text === trimmedWord);
+                if(existingWord){
+                    existingWord.size++;
+                } else {
+                    clouddata.push({ text: trimmedWord, size: 1 });
+                }
+            });
+        }
+    });
+
+    const CloudSvg = d3.create("svg")
+        .attr("width", worksWidth)
+        .attr("height", worksHeight)
+        .call(d3.zoom()
+            .scaleExtent([0.5, 5])
+            .translateExtent([[0, 0], [1, 1]])
+            .on('zoom', (event) => {
+                CloudSvg.selectAll("g").attr("transform", event.transform);
+            })
+        );
+
+    const layout = d3.layout.cloud()
+        .size([worksWidth, worksHeight])
+        .words(clouddata)
+        .padding(5)
+        .rotate(0)
+        .fontSize(d => d.size * 10)
+        .on("end", draw);
+    layout.start();
+
+    function draw(words){
+        const group = CloudSvg.append("g")
+            .attr("transform", `translate(${worksWidth / 2},${worksHeight / 2})`);
+
+        group.selectAll("text")
+            .data(words)
+            .enter()
+            .append("text")
+            .style("font-size", d => d.size + "px")
+            .style("fill", "black")
+            .attr("text-anchor", "middle")
+            .attr("transform", d => `translate(${d.x},${d.y})rotate(${d.rotate})`)
+            .text(d => d.text);
+    }
+    works.appendChild(CloudSvg.node());
+}
+
+  //直方图
+  function renderBar(data){
+      const BarMargin = { top: 15, right: 15, bottom: 10, left: 25 };
+      const AreaCounts = {};
+      data.forEach(d => {
+
+        const area = d.领域;
+          if(AreaCounts[area]){
+              AreaCounts[area]++;
+          }
+          else{
+            AreaCounts[area] = 1;
+          }
+      });
+      const BarData = Object.keys(AreaCounts).map(function(key){
+        return { area: key, count: AreaCounts[key] };
+      });
+    
+      const BarSvg = d3.create("svg")
+                       .attr("width", BarWidth)
+                       .attr("height", BarHeight);
+  
+      const width = BarWidth - BarMargin.left - BarMargin.right;
+      const height = BarHeight - BarMargin.top - BarMargin.bottom;
+  
+      const x = d3.scaleBand()
+                  .domain(BarData.map(function(d){return d.area;}))
+                  .rangeRound([0, width])
+                  .padding(0.1);
+          
+      const y = d3.scaleLinear()
+                  .domain([0, d3.max(BarData, function(d){return d.count;})])
+                  .rangeRound([height, 0]);
+  
+      const g = BarSvg.append("g")
+                      .attr("transform", "translate(" + BarMargin.left + "," + BarMargin.top + ")");
+  
+            g.append("g")
+             .attr("class", "axis axis--x")
+             .attr("transform", "translate(0," + width + ")")
+             .call(d3.axisBottom(x));
+            
+            g.append("g")
+             .attr("class", "axis axis-y")
+             .call(d3.axisLeft(y).ticks(5))
+            g.append("text")
+             .attr("class", "axis-y-text")
+             .attr("y", 6)
+             .attr("dy", "0.71em")
+             .attr("text-anchor", "start")
+             .text("Total Number");
+  
+            g.selectAll(".bars")
+             .data(BarData)
+             .enter().append("rect")
+             .attr("class", "bars")
+             .attr("x", function(d){return x(d.area);})
+             .attr("y", function(d){return y(d.count);})
+             .attr("width", x.bandwidth())
+             .attr("height", function(d){return height - y(d.count);})
+             .attr("fill", "grey")
+             .on("click", function(event, d){
+                const isSelected = d3.select(this).attr("fill") === "black";
+                d3.selectAll('.bartooltip').remove();
+                d3.selectAll('.bars').attr("fill", "grey");      
+                if(!isSelected){
+                  const bartooltip = document.createElement('div');
+                  bartooltip.classList.add('bartooltip');
+                  bartooltip.innerHTML = `
+                    <strong>Area:</strong> ${d.area}<br>
+                    <strong>Number:</strong> ${d.count}
+                  `;
+                  document.body.appendChild(bartooltip);
+                  d3.select(this).attr("fill", "black");
+                }
+            });
+      Bar.appendChild(BarSvg.node());
+   }
+
+  async function renderTopic(topicIds = []){
+    return new Promise((resolve, reject) => {
+      d3.json("topic1_info.json").then(data => {
+        topicJSONData = data;
+        console.log(topicJSONData);
+        resolve();
+      }).catch(error => {
+        reject(error);
+      });
+    });
+  }  
+      
+  scatterpoint.appendChild(scatterPlotSvg.node());
+     
+  let circleRadius = 50;
+    
+  function drawCircleBrush(centerX, centerY){
+    scatterPlotGroup.selectAll('.brush-circle').remove();
+    scatterPlotGroup.append('circle')
+                    .attr('class', 'brush-circle')
+                    .attr('cx', centerX)
+                    .attr('cy', centerY)
+                    .attr('r', circleRadius)
+                    .style('fill', '#b4afaf') 
+                    .style('opacity', 0.6) 
+                    .style('stroke', 'none')
+                    .style('stroke-width', '1px')
+                    .style('pointer-events', 'all')
+                    .call(d3.drag().on("drag", dragged)
+                                   .on("start", dragstarted)
+                                   .on("end", dragended));
+  }
+
+  function dragged(event, d){
+    drawCircleBrush(event.x, event.y);
+    updateSelectedData(event.x, event.y);
+    updateRingPosition(event.x, event.y);
+  }
+      
+  function dragstarted(){
+  }
+      
+  function dragended() {    
+  }
+      
+  async function updateSelectedData(centerX, centerY){
+    const selectedData = scatterData.filter(d => {
+      const dx = xScale(d.tsne_x) - centerX;
+      const dy = yScale(d.tsne_y) - centerY;
+      return Math.sqrt(dx * dx + dy * dy) < circleRadius;
+    });
+    await renderTopic(selectedData.map(item => item.Topic)); 
+    updatePieChart(selectedData);
+    ShowTitle(selectedData,scatterData);
+    drawWordCloud(selectedData);
+  }
+  
+  function handleScroll(event){
+    event.preventDefault();
+    const selection = scatterPlotGroup.select('.brush-circle');
+    if(selection.empty()) return;
+    const newRadius = Math.max(10, circleRadius + event.deltaY * -0.01);
+    circleRadius = newRadius;
+    selection.attr('r', circleRadius);
+    updateSelectedData(parseFloat(selection.attr('cx')), parseFloat(selection.attr('cy')));
+  }
+    
+  document.addEventListener('wheel', function(event){
+    const target = event.target;
+    if(target.closest('.scatter-point')){
+      handleScroll(event);
+    }
+  }, { passive: false });
+    
+  let pieChartGroup; 
+  function updatePieChart(selectedData){
+    console.log(selectedData);
+    const keywordCounts = {};
+    selectedData.forEach(item => {
+      const keywords = topicJSONData.find(topic => topic.Topic === item.Topic)?.KeyBERT;
+      if(keywords){
+        keywords.forEach(keyword => {
+          keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+        });
+      }
+    });   
+    if(!pieChartGroup){
+      pieChartGroup = scatterPlotGroup.append("g")
+                                      .attr("class", "pie-chart")
+                                      .attr("transform", `translate(${scatterWidth/2}, ${scatterHeight/2})`);
+    }
+    pieChartGroup.selectAll("path").remove();
+    pieChartGroup.selectAll("text").remove();
+    const keywordsArray = Object.entries(keywordCounts);
+    keywordsArray.sort((a, b) => b[1] - a[1]);
+    const total = keywordsArray.reduce((acc, [keyword, count]) => acc + count, 0);
+    const m = 25; 
+    const selectedKeywords = keywordsArray.slice(0, m);
+    const numKeywords = Object.keys(keywordCounts).length;
+    const frequencies = {};
+    for(const [keyword, count] of Object.entries(keywordCounts)){
+      frequencies[keyword] = count/total;
+    }
+    const angles = {};
+    let startAngle = 0;
+    for(const [keyword, frequency] of Object.entries(frequencies)){
+      const angle = frequency*360;
+      angles[keyword] = { startAngle, endAngle: startAngle + angle };
+      startAngle += angle;
+    }
+    const pieRadius = circleRadius * 1.5;
+    for(const [keyword, angle] of Object.entries(angles)){
+      const arc = d3.arc()
+                    .innerRadius(circleRadius*1.15)
+                    .outerRadius(pieRadius)
+                    .startAngle((angle.startAngle*Math.PI)/180)
+                    .endAngle((angle.endAngle*Math.PI)/180);
+      pieChartGroup.append("path")
+                   .attr("d", arc)
+                   .attr("fill", "none")
+                   .attr("stroke", "black")
+                   .attr("stroke-width", 1);
+    }
+    const angleStep = 360/(m > numKeywords ? numKeywords : m);
+    let currentAngle = 0;
+    for(const [keyword, count] of selectedKeywords){
+      const angle = currentAngle + angleStep;
+      let x = 1.25*pieRadius*Math.cos(angle*Math.PI/180);
+      let y = 1.25*pieRadius*Math.sin(angle*Math.PI/180);
+      
+      pieChartGroup.append("text")
+                   .attr("x", x)
+                   .attr("y", y)
+                   .text(`${keyword}: ${count}`)
+                   .attr("font-size", 12)
+                   .attr("fill", "black")
+                   .attr("text-anchor", angle > 90 && angle < 270 ? "end" : "start")
+                   .attr("alignment-baseline", "middle");   
+      currentAngle += angleStep;
+    }
+  }
+  
+  function updateRingPosition(centerX, centerY){
+    const pieChartGroup = scatterPlotGroup.select(".pie-chart");
+    const selection = scatterPlotGroup.select('.brush-circle');
+      
+    pieChartGroup.attr("transform", `translate(${centerX}, ${centerY})`);
+    const circleRadius = parseFloat(selection.attr('r'));
+    pieChartGroup.selectAll("path")
+                 .attr("innerRadius", circleRadius)
+                 .attr("outerRadius", circleRadius*1.5);
+  }
+  const divContainer = document.querySelector('.divContainer');   
+  
+  const alphabet = "abcdefghijklmnopqrstuvwxyz".split("");
+
+const buttonsContainer = document.querySelector('.letter');
+alphabet.forEach(letter => {
+    const button = document.createElement('button');
+    button.textContent = letter;
+    button.style.width = '15px';
+    button.style.margin = '3.5px';
+    button.addEventListener('click', () => filterByLetter(letter));
+    buttonsContainer.appendChild(button);
+});
+function filterByLetter(letter) {
+    const checkboxes = document.querySelectorAll('.divContainer div');
+    checkboxes.forEach(div => {
+        const label = div.querySelector('p').textContent;
+        console.log(label);
+            if (label[0].toLowerCase() === letter) {
+                div.style.display = 'flex';
+            } else {
+                div.style.display = 'none';
+            }
+    });
+}
+
+  fetch('projects.json')
+    .then(response => response.json())
+    .then(data => {
+      const keywordSet = new Set();
+      data.forEach((item, index) => {
+        const keywords = item['关键词'] ? item['关键词'].split(/[;,-]/) : [];
+        keywords.forEach(keyword => {
+          const keywordLower = keyword.toLowerCase();
+          if(keywordSet.has(keywordLower)||keywordLower == " "||keywordLower == ""){
+            return;
+          }
+          keywordSet.add(keywordLower);
+          
+          const wrapperDiv = document.createElement('div');
+          wrapperDiv.style.display = 'flex'; 
+          wrapperDiv.style.alignItems = 'center';
+      
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = `checkbox-${index}`;
+      
+          const paragraph = document.createElement('p');
+          paragraph.textContent = keywordLower; 
+          paragraph.style.backgroundColor = generateColor(index, keywordSet.size);
+          paragraph.style.color = 'black'; 
+          paragraph.style.flex = '1';
+          paragraph.style.margin = '1px'; 
+          paragraph.style.border = 'none'; 
+
+          checkbox.style.marginRight = '5px';
+          checkbox.style.height = '25px';
+          paragraph.style.fontSize = '13px'; 
+          paragraph.style.height = '30px';
+          checkbox.addEventListener('change', function(){
+            const selectedkeyword = this.parentNode.querySelector('p').textContent;
+            const selectedkeywordColor = this.parentNode.querySelector('p').style.backgroundColor;
+            highlightScatterPoints(selectedkeyword, selectedkeywordColor, this.checked);
+          });
+        wrapperDiv.appendChild(checkbox);
+        wrapperDiv.appendChild(paragraph);
+        divContainer.appendChild(wrapperDiv);
+        });
+      });
+    }).catch(error => console.error('Error fetching data:', error));
+  function generateColor(index, total){
+    const hue = Math.floor(Math.random()*360); 
+    const saturation = 30 + Math.random()*50;
+    const lightness = 30 + Math.random()*50; 
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
+  
+  function highlightScatterPoints(keyword, color, checked){      
+      const scatterPoints = scatterPlotGroup.selectAll('.scatter-point');
+      scatterPoints.each(function(d){
+        const circle = d3.select(this);
+        const keywords = d.关键词 ? d.关键词.split(/[;,]/) : [];
+
+        const lowerCaseKeywords = keywords.map(kw => kw.toLowerCase());
+       
+        if(lowerCaseKeywords.includes(keyword)){ 
+          circle.style('fill', checked ? color : 'grey');
+          console.log("circle",lowerCaseKeywords);
+        }
+        else if(!checked){
+          circle.style('fill', 'grey'); 
+        }
+      });
+    }
+ 
+    const searchBox = document.querySelector('.searchBox');
+    searchBox.addEventListener('input', function(event) {
+    const FilterKeyword = event.target.value.trim();
+  
+    filter(FilterKeyword);
+
+});
+    function filter(word){
+      console.log('Filtering with keyword:', word);
+      const checkboxes = document.querySelectorAll('.divContainer input[type=checkbox]');
+      const paragraphs = document.querySelectorAll('.divContainer p');
+  
+      checkboxes.forEach((checkbox, index) => {
+        const paragraph = paragraphs[index]; 
+        const isVisible = paragraph.textContent.toLowerCase().includes(word.toLowerCase());
+        console.log(`Checkbox ${index} visibility: ${isVisible ? 'visible' : 'hidden'}`); // 打印复选框的可见性
+        checkbox.style.display = isVisible ? 'block' : 'none';
+        paragraph.style.display = isVisible ? 'block' : 'none';
+  });   
+    }
+      
+  //展示详细信息
+  function ShowTitle(selectedData,scatterData){
+      const PaperContainer = document.querySelector('.PaperContainer');
+      PaperContainer.innerHTML = '';
+      selectedData.forEach(item => {
+        const TitleDiv = document.createElement('p');
+        TitleDiv.style.display = 'flex'; 
+        TitleDiv.style.alignItems = 'center';
+        const paragraph = document.createElement('span');
+        paragraph.textContent = item.项目名称;
+        paragraph.style.color = 'black';
+        paragraph.style.flex = '1'; 
+        paragraph.style.margin = '0px';
+        paragraph.style.fontSize = '10px'; 
+        paragraph.style.height = '30px';
+        paragraph.style.border = '1px solid black';
+        paragraph.addEventListener('click', () => {
+          const allParagraphs = PaperContainer.querySelectorAll('span');
+          allParagraphs.forEach(p => {
+          p.style.backgroundColor = '';
+          });
+          scatterPlotGroup.selectAll('.scatter-point').style('fill', 'grey');
+          d3.selectAll('.tooltip').remove();
+          paragraph.style.backgroundColor = 'yellow';
+          const tooltip = document.createElement('div');
+          tooltip.classList.add('tooltip');
+          tooltip.innerHTML = `
+            <strong>Title:</strong> ${item.项目名称}<br>
+            <strong>Area:</strong> ${item.领域}<br>
+            <strong>Affiliation:</strong> ${item.依托单位}<br>
+            <strong>Link:</strong> ${item.网页介绍}
+          `;
+          document.body.appendChild(tooltip);
+          highlightScatterPoint(item,scatterData);
+          if (item.人员要求) {
+                highlightWords(item.人员要求);
+            }
+            else {
+                resetCloudWordsColor(); 
+            }
+        });
+        TitleDiv.appendChild(paragraph);
+        PaperContainer.appendChild(TitleDiv);
+      }); 
+    }
+    function highlightWords(requirements) {
+    const words = requirements.split(/[;,]+/).map(w => w.trim());
+    const cloudWords = d3.selectAll(".works text");
+
+    cloudWords.each(function() { // Iterate through each text element
+        const textElement = d3.select(this);
+        
+        const textContent = textElement.text();
+        const splitText = textContent.split(/[;,]+/);
+        
+        textElement.text('');
+
+        splitText.forEach(word => {
+            const tspan = textElement.append('tspan')
+                .text(word)
+                .style('fill', words.includes(word) ? 'red' : 'black');
+        });
+    });
+}
+
+function resetCloudWordsColor() {
+    const cloudWords = d3.selectAll(".works text tspan");
+    cloudWords.style('fill', 'black');
+}
+
+    function highlightScatterPoint(dataItem,scatterData){
+      const scatterPoints = scatterPlotGroup.selectAll('.scatter-point');
+      scatterPoints.each(function(d){
+        if(d.项目名称 === dataItem.项目名称){
+            d3.select(this).style('fill', 'red');
+        }
+      });
+    }
+  
+   document.addEventListener('click', (event) => {
+    const target = event.target;
+    if(!target.closest('.PaperContainer')&&!target.closest('.container-left')){
+      d3.selectAll('.tooltip').remove();
+      scatterPlotGroup.selectAll('.scatter-point').style('fill', 'grey');
+      d3.selectAll(".works text tspan").style('fill', 'black');
+      const PaperContainer = document.querySelector('.PaperContainer');
+      const allParagraphs = PaperContainer.querySelectorAll('span');
+      allParagraphs.forEach(p => {
+        p.style.backgroundColor = ''; 
+      });
+    }
+  });
+    
+    pngbuttons();
+    function redrawSvg(){
+      scatterpoint.innerHTML = '';
+      divContainer.innerHTML = '';
+
+       
+      const scatterWidth = scatterpoint.clientWidth;
+      const scatterHeight = scatterpoint.clientHeight;
+        
+      const scatterPlotSvg = d3.create("svg")
+                               .attr("viewBox", [0, 0, scatterWidth, scatterHeight]);
+        
+      const scatterPlotGroup = scatterPlotSvg.append("g")
+                                             .attr("transform", `translate(${margin.left}, ${margin.top})`);
+  
+      let xScale, yScale, scatterData
+  
+      d3.json('projects.json').then(data => {
+        const domains = Array.from(new Set(data.map(d => d.领域)));
+        const colorScale = d3.scaleOrdinal()
+                             .domain(domains)
+                             .range(d3.schemeCategory10);
+        xScale = d3.scaleLinear()
+                   .domain(d3.extent(data.map(d => d.tsne_x)))
+                   .range([margin.left+105, scatterWidth - margin.right-105]);
+  
+        yScale = d3.scaleLinear()
+                   .domain(d3.extent(data.map(d => d.tsne_y)))
+                   .range([scatterHeight - margin.bottom-35, margin.top+35]);
+  
+        scatterData = data;
+   
+        scatterPlotGroup.selectAll('circle')
+                        .data(data)
+                        .enter()
+                        .append('circle')
+                        .attr('class', 'scatter-point')
+                        .attr('cx', d => xScale(d.tsne_x))
+                        .attr('cy', d => yScale(d.tsne_y))
+                        .attr('r', 4)
+                        .style('fill', d => colorScale(d.领域))
+        drawCircleBrush(scatterWidth/2, scatterHeight/2);
+        updateSelectedData(scatterWidth/2, scatterHeight/2);    
+      });
+
+      scatterpoint.appendChild(scatterPlotSvg.node());
+      let circleRadius = 50;
+      // 绘制圆形选择器
+      function drawCircleBrush(centerX, centerY){
+        scatterPlotGroup.selectAll('.brush-circle').remove();
+        scatterPlotGroup.append('circle')
+                        .attr('class', 'brush-circle')
+                        .attr('cx', centerX)
+                        .attr('cy', centerY)
+                        .attr('r', circleRadius)
+                        .style('fill', '#b4afaf') 
+                        .style('opacity', 0.6) 
+                        .style('stroke', 'none')
+                        .style('stroke-width', '1px')
+                        .style('pointer-events', 'all')
+                        .call(d3.drag().on("drag", dragged)
+                                       .on("start", dragstarted)
+                                       .on("end", dragended));      
+      }
+      // 处理拖动事件
+      function dragged(event, d){
+        drawCircleBrush(event.x, event.y);
+        updateSelectedData(event.x, event.y);
+        updateRingPosition(event.x, event.y);
+      }
+      function dragstarted(){
+      }
+      function dragended(){    
+      }
+      // 根据圆形选择器的位置更新选择的数据
+      async function updateSelectedData(centerX, centerY){
+        const selectedData = scatterData.filter(d => {
+          const dx = xScale(d.tsne_x) - centerX;
+          const dy = yScale(d.tsne_y) - centerY;
+          return Math.sqrt(dx * dx + dy * dy) < circleRadius;
+        });
+        await renderTopic(selectedData.map(item => item.Topic));
+        updatePieChart(selectedData);
+        ShowTitle(selectedData,scatterData);
+        drawWordCloud(selectedData);
+      }
+  
+      // 用于调整圆形选择器大小的滚动事件处理器
+      function handleScroll(event){
+        event.preventDefault();
+        const selection = scatterPlotGroup.select('.brush-circle');
+        if (selection.empty()) return;
+        const newRadius = Math.max(10, circleRadius + event.deltaY * -0.01);
+        circleRadius = newRadius;
+        selection.attr('r', circleRadius);
+        updateSelectedData(parseFloat(selection.attr('cx')), parseFloat(selection.attr('cy')));
+      }
+      // 添加鼠标移动事件监听器
+      document.addEventListener('wheel', function(event){
+        const target = event.target;
+        if(target.closest('.scatter-point')){
+          handleScroll(event);
+        }
+      },{ passive: false });
+    
+      let pieChartGroup; 
+      // 更新环形统计图
+      function updatePieChart(selectedData){
+        console.log(selectedData);
+        const keywordCounts = {};
+        selectedData.forEach(item => {
+          const keywords = topicJSONData.find(topic => topic.Topic === item.Topic)?.KeyBERT;
+          if(keywords){
+            keywords.forEach(keyword => {
+              keywordCounts[keyword] = (keywordCounts[keyword] || 0) + 1;
+            });
+          }
+        });
+        if(!pieChartGroup){
+          pieChartGroup = scatterPlotGroup.append("g")
+                                          .attr("class", "pie-chart")
+                                          .attr("transform", `translate(${scatterWidth/2}, ${scatterHeight/2})`);
+        }
+        pieChartGroup.selectAll("path").remove();
+        pieChartGroup.selectAll("text").remove();
+      
+        const keywordsArray = Object.entries(keywordCounts);
+        keywordsArray.sort((a, b) => b[1] - a[1]);
+        const total = keywordsArray.reduce((acc, [keyword, count]) => acc + count, 0);
+        const m = 25; 
+        const selectedKeywords = keywordsArray.slice(0, m);
+        const numKeywords = Object.keys(keywordCounts).length;
+        const frequencies = {};
+        for(const [keyword, count] of Object.entries(keywordCounts)){
+          frequencies[keyword] = count/total;
+        }
+        const angles = {};
+        let startAngle = 0;
+        for(const [keyword, frequency] of Object.entries(frequencies)){
+          const angle = frequency*360;
+          angles[keyword] = { startAngle, endAngle: startAngle + angle };
+          startAngle += angle;
+        }
+        const pieRadius = circleRadius*1.5;
+  
+        for(const [keyword, angle] of Object.entries(angles)){
+          const arc = d3.arc()
+                        .innerRadius(circleRadius*1.15)
+                        .outerRadius(pieRadius)
+                        .startAngle((angle.startAngle*Math.PI)/180)
+                        .endAngle((angle.endAngle*Math.PI)/180);
+          pieChartGroup.append("path")
+                       .attr("d", arc)
+                       .attr("fill", "none")
+                       .attr("stroke", "black")
+                       .attr("stroke-width", 1);
+        }
+        const angleStep = 360/(m > numKeywords ? numKeywords : m);
+        let currentAngle = 0;
+        for(const [keyword, count] of selectedKeywords){
+          const angle = currentAngle + angleStep;
+          let x = 1.25*pieRadius*Math.cos(angle*Math.PI/180);
+          let y = 1.25*pieRadius*Math.sin(angle*Math.PI/180);
+          pieChartGroup.append("text")
+                       .attr("x", x)
+                       .attr("y", y)
+                       .text(`${keyword}: ${count}`)
+                       .attr("font-size", 12)
+                       .attr("fill", "black")
+                       .attr("text-anchor", angle > 90 && angle < 270 ? "end" : "start")
+                       .attr("alignment-baseline", "middle"); 
+          currentAngle += angleStep;
+        }
+      }
+      // 更新圆环的位置
+      function updateRingPosition(centerX, centerY){
+        const pieChartGroup = scatterPlotGroup.select(".pie-chart");
+        const selection = scatterPlotGroup.select('.brush-circle');
+        pieChartGroup.attr("transform", `translate(${centerX}, ${centerY})`);
+        const circleRadius = parseFloat(selection.attr('r'));
+        pieChartGroup.selectAll("path")
+                     .attr("innerRadius", circleRadius)
+                     .attr("outerRadius", circleRadius*1.5);
+      }
+      
+      fetch('projects.json')
+    .then(response => response.json())
+    .then(data => {
+      const keywordSet = new Set();
+      data.forEach((item, index) => {
+        const keywords = item['关键词'] ? item['关键词'].split(/[;,]/) : [];
+        keywords.forEach(keyword => {
+          const keywordLower = keyword.toLowerCase();
+          if(keywordSet.has(keywordLower)||keywordLower == " "||keywordLower == ""){
+            return;
+          }
+          keywordSet.add(keywordLower);
+          
+          const wrapperDiv = document.createElement('div');
+          wrapperDiv.style.display = 'flex'; 
+          wrapperDiv.style.alignItems = 'center';
+      
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = `checkbox-${index}`;
+      
+          const paragraph = document.createElement('p');
+          paragraph.textContent = keywordLower; 
+          paragraph.style.backgroundColor = generateColor(index, keywordSet.size);
+          paragraph.style.color = 'black'; 
+          paragraph.style.flex = '1';
+          paragraph.style.margin = '1px'; 
+          paragraph.style.border = 'none'; 
+
+          checkbox.style.marginRight = '5px';
+          checkbox.style.height = '25px';
+          paragraph.style.fontSize = '13px'; 
+          paragraph.style.height = '25px';
+          checkbox.addEventListener('change', function(){
+            const selectedkeyword = this.parentNode.querySelector('p').textContent;
+            const selectedkeywordColor = this.parentNode.querySelector('p').style.backgroundColor;
+            highlightScatterPoints(selectedkeyword, selectedkeywordColor, this.checked);
+          });
+        wrapperDiv.appendChild(checkbox);
+        wrapperDiv.appendChild(paragraph);
+        divContainer.appendChild(wrapperDiv);
+        });
+      });
+    }).catch(error => console.error('Error fetching data:', error));// 高亮散点
+
+    function highlightScatterPoints(keyword, color, checked){      
+      const scatterPoints = scatterPlotGroup.selectAll('.scatter-point');
+      scatterPoints.each(function(d){
+        const circle = d3.select(this);
+        const keywords = d.关键词 ? d.关键词.split(/[;,-]/) : [];
+
+        const lowerCaseKeywords = keywords.map(kw => kw.toLowerCase());
+       
+        if(lowerCaseKeywords.includes(keyword)){ 
+          circle.style('fill', checked ? color : 'grey');
+          console.log("circle",lowerCaseKeywords);
+        }
+        else if(!checked){
+          circle.style('fill', 'grey'); 
+        }
+      });
+    } 
+    function ShowTitle(selectedData,scatterData){
+      const PaperContainer = document.querySelector('.PaperContainer');
+      PaperContainer.innerHTML = '';
+      selectedData.forEach(item => {
+        const TitleDiv = document.createElement('p');
+        TitleDiv.style.display = 'flex'; 
+        TitleDiv.style.alignItems = 'center';
+        const paragraph = document.createElement('span');
+        paragraph.textContent = item.项目名称;
+        paragraph.style.color = 'black';
+        paragraph.style.flex = '1'; 
+        paragraph.style.margin = '0px';
+        paragraph.style.fontSize = '10px'; 
+        paragraph.style.height = '30px';
+        paragraph.style.border = '1px solid black';
+        paragraph.addEventListener('click', () => {
+          const allParagraphs = PaperContainer.querySelectorAll('span');
+          allParagraphs.forEach(p => {
+          p.style.backgroundColor = '';
+          });
+          scatterPlotGroup.selectAll('.scatter-point').style('fill', 'grey');
+          d3.selectAll('.tooltip').remove();
+          paragraph.style.backgroundColor = 'yellow';
+          const tooltip = document.createElement('div');
+          tooltip.classList.add('tooltip');
+          tooltip.innerHTML = `
+            <strong>Title:</strong> ${item.项目名称}<br>
+            <strong>Area:</strong> ${item.领域}<br>
+            <strong>Affiliation:</strong> ${item.依托单位}<br>
+            <strong>Link:</strong> ${item.网页介绍}
+          `;
+          document.body.appendChild(tooltip);
+          highlightScatterPoint(item,scatterData);
+          if (item.人员要求) {
+                highlightWords(item.人员要求);
+            }
+            else {
+                resetCloudWordsColor(); 
+            }
+        });
+        TitleDiv.appendChild(paragraph);
+        PaperContainer.appendChild(TitleDiv);
+      }); 
+    }
+    
+    function highlightWords(requirements) {
+    const words = requirements.split(/[;,]+/).map(w => w.trim());
+    const cloudWords = d3.selectAll(".works text");
+
+    cloudWords.each(function() { // Iterate through each text element
+        const textElement = d3.select(this);
+        
+        const textContent = textElement.text();
+        const splitText = textContent.split(/[;,]+/);
+        
+        textElement.text('');
+
+        splitText.forEach(word => {
+            const tspan = textElement.append('tspan')
+                .text(word)
+                .style('fill', words.includes(word) ? 'red' : 'black');
+        });
+    });
+}
+
+function resetCloudWordsColor() {
+    const cloudWords = d3.selectAll(".works text tspan");
+    cloudWords.style('fill', 'black');
+}
+
+
+    function highlightScatterPoint(dataItem,scatterData){
+      const scatterPoints = scatterPlotGroup.selectAll('.scatter-point');
+      scatterPoints.each(function(d){
+        if(d.项目名称 === dataItem.项目名称){
+            d3.select(this).style('fill', 'red');
+        }
+      });
+    }
+
+  
+      document.addEventListener('click', (event) => {
+        const target = event.target;
+        if(!target.closest('.PaperContainer')&&!target.closest('.container-left')){
+          d3.selectAll('.tooltip').remove();
+          scatterPlotGroup.selectAll('.scatter-point').style('fill', 'grey');
+          d3.selectAll(".works text tspan").style('fill', 'black');
+          const PaperContainer = document.querySelector('.PaperContainer');
+          const allParagraphs = PaperContainer.querySelectorAll('span');
+          allParagraphs.forEach(p => {
+            p.style.backgroundColor = '';
+          });
+        }
+      });
+    }
+    
+    function clearImageButtons(){
+      const buttonsContainer = document.querySelector('.buttons-container');
+      if(buttonsContainer){
+        buttonsContainer.remove();
+      }
+    }
+  
+    function pngbuttons(){
+      const buttonsContainer = document.createElement('div');
+      buttonsContainer.className = 'buttons-container';
+
+      const button1 = document.createElement('img');
+      button1.src = 'img/brushcircle.png';
+      button1.className = 'image-button';
+      button1.onclick = handleButtonClick1;
+  
+      const button2 = document.createElement('img');
+      button2.src = 'img/piechart.png';
+      button2.className = 'image-button';
+      button2.onclick = handleButtonClick2;
+  
+      buttonsContainer.appendChild(button1);
+      buttonsContainer.appendChild(button2);
+    
+  
+      containerMiddle.appendChild(buttonsContainer);
+      const w = containerMiddle.clientWidth;
+      containerMiddle.style.position = 'relative';
+
+      buttonsContainer.style.display = 'flex';
+      buttonsContainer.style.flexDirection = 'column';
+      buttonsContainer.style.alignItems = 'flex-end';
+      buttonsContainer.style.position = 'absolute';
+      buttonsContainer.style.bottom = '0px';
+      buttonsContainer.style.right = '0px';  
+
+      const imageButtons = document.querySelectorAll('.image-button');
+      imageButtons.forEach(button => {
+        button.style.width =  0.08*w + 'px';
+        button.style.marginBottom = '0px';
+        button.style.cursor = 'pointer';
+      });
+      function handleButtonClick1(){
+        const circleBrush = document.querySelector('.brush-circle');
+        if(circleBrush.style.display === 'none'){
+          circleBrush.style.display = 'block'; 
+        }
+        else{
+          circleBrush.style.display = 'none';
+        }
+      }
+  
+      function handleButtonClick2(){
+        const piechart = document.querySelector('.pie-chart');
+        if(piechart.style.display === 'none'){
+          piechart.style.display = 'block';
+        }
+        else{
+          piechart.style.display = 'none';
+        }
+      }
+  }
+  
+  document.querySelector('.toggleCollapse').addEventListener('click', function (){
+    containerRight.classList.toggle("collapsed");
+    if(containerRight.classList.contains("collapsed")){
+      containerRight.style.display = "none";
+      containerMiddle.classList.add('container-middle-expanded'); 
+      clearImageButtons();
+      redrawSvg();
+      pngbuttons();
+    }
+    else{
+      containerRight.style.display = "block";
+      containerMiddle.classList.remove('container-middle-expanded');
+      clearImageButtons();
+      redrawSvg();
+      pngbuttons();
+    }
+  });
+    
+</script>
+</body>
+</html>
