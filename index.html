@@ -517,7 +517,7 @@ function filterByLetter(letter) {
       data.forEach((item, index) => {
         const keywords = item['关键词'] ? item['关键词'].split(/[;,-]/) : [];
         keywords.forEach(keyword => {
-          const keywordLower = keyword.toLowerCase();
+          const keywordLower = keyword.trim().toLowerCase();
           if(keywordSet.has(keywordLower)||keywordLower == " "||keywordLower == ""){
             return;
           }
@@ -885,7 +885,7 @@ function resetCloudWordsColor() {
       data.forEach((item, index) => {
         const keywords = item['关键词'] ? item['关键词'].split(/[;,]/) : [];
         keywords.forEach(keyword => {
-          const keywordLower = keyword.toLowerCase();
+          const keywordLower = keyword.trim().toLowerCase();
           if(keywordSet.has(keywordLower)||keywordLower == " "||keywordLower == ""){
             return;
           }
