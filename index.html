@@ -567,7 +567,7 @@ function filterByLetter(letter) {
         const circle = d3.select(this);
         const keywords = d.关键词 ? d.关键词.split(/[;,]/) : [];
 
-        const lowerCaseKeywords = keywords.map(kw => kw.toLowerCase());
+        const lowerCaseKeywords = keywords.map(kw => kw.trim().toLowerCase());
        
         if(lowerCaseKeywords.includes(keyword)){ 
           circle.style('fill', checked ? color : 'grey');
@@ -928,8 +928,8 @@ function resetCloudWordsColor() {
       scatterPoints.each(function(d){
         const circle = d3.select(this);
         const keywords = d.关键词 ? d.关键词.split(/[;,-]/) : [];
-
-        const lowerCaseKeywords = keywords.map(kw => kw.toLowerCase());
+        
+        const lowerCaseKeywords = keywords.map(kw => kw.trim().toLowerCase());
        
         if(lowerCaseKeywords.includes(keyword)){ 
           circle.style('fill', checked ? color : 'grey');
